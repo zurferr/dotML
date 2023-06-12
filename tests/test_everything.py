@@ -12,12 +12,25 @@ class MyTestCase(unittest.TestCase):
 
     def test_simple_query(self):
         query = {
-            "fields": ["orders.id", "orders.booking_date_week", "orders.country_id", "orders.revenue", "orders.average_order_value_rolling"],
-            "filters": ["${orders.country_id} = 'COMPLETE'"],
+            "fields": ["orders.id", "orders.booking_date_week", "orders.country_id", "orders.revenue",
+                       "orders.average_order_value_rolling"],
+            "filters": ["${orders.country_id} = '67'"],
             "sorts": ["orders.booking_date_week"],
             "limit": 10
         }
 
+        cube_configs = load_cube_configs(dir_path="../cubes")
+        sql = generate_sql_query(cube_configs[0], query)
+        print(sql)
+
+    def test_complex_query(self):
+        query = {
+            "fields": ["orders.booking_date_month", "orders.country_id", "orders.revenue",
+                       "orders.average_order_value_rolling", "orders_items.quantity"],
+            "filters": ["${orders.country_id} = '67'"],
+            "sorts": ["orders.booking_date_week"],
+            "limit": 100
+        }
         cube_configs = load_cube_configs(dir_path="../cubes")
         sql = generate_sql_query(cube_configs[0], query)
         print(sql)

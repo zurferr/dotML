@@ -19,16 +19,8 @@ def substitute_variables(template: str, variables: Dict, recursive=True) -> str:
             compiled_string = substitute_variables(compiled_string, variables)
     return compiled_string
 
-def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[str], limit: Optional[int]) -> str:
-    """a simple query does not require joins"""
 
-    cube_fields = {f['name']: {**f, 'dim': True} for f in cube['dimensions']}
-    cube_fields = {**cube_fields, **{f['name']: {**f, 'dim': False} for f in cube['metrics']}}
-    cube_fields = {**cube_fields, **{f['name']: {**f, 'dim': False, 'window': True} for f in cube['window_metrics']}}
-
-    select_fields = []
-    window_fields = []
-
+def expand_variants(cube_fields: Dict) -> Dict:
     additional_fields = {}
     fields_to_remove = []
 
@@ -58,17 +50,38 @@ def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[
 
     # add fields variant fields
     cube_fields = {**cube_fields, **additional_fields}
+    return cube_fields
 
+
+def get_table_alias(table_name: str) -> str:
     # get last part of the table name and add random string to it
     random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    table_alias = cube.get('table').split('.')[-1] + '_' + random_part
+    table_alias = table_name.split('.')[-1] + '_' + random_part
+    return table_alias
 
-    from_expr = f"{cube.get('table')} as {table_alias}"
-
+def get_simple_variables(table_alias: str, cube_fields: Dict) -> Dict:
     field_variables = {cf: cube_fields[cf].get('sql') for cf in cube_fields}  # e.g ${revenue} - ${cost}
     # identifier_variables e.g. ${orders.total}, first replace to ${orders__total} should resolve to sql
-    identifier_variables = {f"{cube.get('name')}__{cf}": cube_fields[cf].get('sql') for cf in cube_fields}
+    identifier_variables = {f"{table_alias}__{cf}": cube_fields[cf].get('sql') for cf in cube_fields}
     variables = {**{'table': table_alias}, **field_variables, **identifier_variables}
+    return variables
+
+def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[str], limit: Optional[int]) -> str:
+    """a simple query does not require joins"""
+
+    cube_fields = {f['name']: {**f, 'dim': True} for f in cube['dimensions']}
+    cube_fields = {**cube_fields, **{f['name']: {**f, 'dim': False} for f in cube['metrics']}}
+    cube_fields = {**cube_fields, **{f['name']: {**f, 'dim': False, 'window': True} for f in cube['window_metrics']}}
+
+    # add fields variant fields
+    cube_fields = expand_variants(cube_fields)
+
+    table_alias = get_table_alias(cube.get('table'))
+
+    variables = get_simple_variables(table_alias, cube_fields)
+
+    select_fields = []
+    window_fields = []
 
     for query_field in fields:
         field_name = query_field.split('.')[1]
@@ -85,6 +98,8 @@ def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[
                 select_fields.append(cube_field)
 
     select_expr = ', '.join([f"{sf.get('sql')} as {sf.get('name')}" for sf in select_fields])
+
+    from_expr = f"{cube.get('table')} as {table_alias}"
 
     # add filters and where clause
     where_expr = None
@@ -144,12 +159,24 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
             raise ValueError(f"Cube {cube.get('name')} has no join defined")
 
     # 1. for each cube aggregate a helper cte with all required dimensions (based on primary key)
+    # example query:
+    # with order_dimension as (
+    #         select
+    #         orders.id as pk,
+    #         order_items.product_category as product_category
+    #         left join order_items
+    #         on orders.id = order_items.order_id
+    #         group by 1, 2
+    # )
+    # 1.1 get list of queried dimension fields per cube + primary key
+    # 1.2 create join expression for each cube
+
+    select_expr_dim = ', '.join([f"{f.get('sql')} as {f.get('name')}" for f in cube['dimensions']])
 
     # 2. join the helper cte with a cte for each cubes metrics
     # 3. join all cte's together
 
     return query
-
 
 
 def generate_sql_query(cubes_config: Dict, query: Dict) -> str:
@@ -169,7 +196,7 @@ def generate_sql_query(cubes_config: Dict, query: Dict) -> str:
     # we need to merge all cubes dimensions and metrics first, then extract the names as cubename + . + fieldname
     all_fields = []
     for cube in cubes:
-        for cube_field in (cube['dimensions'] + cube['metrics'] + cube.get('window_metrics', [])):
+        for cube_field in (cube.get('dimensions', []) + cube.get('metrics', []) + cube.get('window_metrics', [])):
             if cube_field.get('variants') is None:
                 all_fields.append(cube['name'] + '.' + cube_field['name'])
             else:

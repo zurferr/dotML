@@ -59,6 +59,7 @@ on a.booking_date = a.booking_date and b.country = b.country
 -- revenue, quantity by country, product_category
 -- fix with pk
 -- 🐞 dimension tables can also get duplicate order id, when multiple product categories are in the same order
+-- ✅ some queries could be undefined -> show warning, e.g. revenue for product category
 
 with order_dimension as (
     select

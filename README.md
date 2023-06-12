@@ -1,48 +1,51 @@
 ![DotCube](assets/dotcube.png)
 # Cuby
+⚠️ work in progress ⚠️
 
-Cuby is a lightweight metric store with minimal abstractions. It enables fetching metrics, filtered by dimensions, by parsing metric queries based on a data model. The data model defines dimensions and metrics similar to Looker and supports inner joins on primary keys. The data model is defined in YAML files. The package generates a SQL query that you can use in SQLAlchemy to fetch your results.
+Cuby is a lightweight metric store with minimal abstractions. 
+It enables fetching metrics, filtered by dimensions, by parsing metric queries based on a data model. 
+The data model defines dimensions and metrics similar to Looker and supports joins on primary keys. 
+The data model is defined in YAML files. 
+The package generates a SQL query that you can use to fetch your results.
 
 ## Installation
 
-To install the package, navigate to the directory containing the package (the parent directory of `dotcube/`) and run:
-
 ```bash
-pip install -e .
+pip install cuby
 ```
 
 ## Usage
 
-MetricStore can be used both as a Python library and through its command line interface (CLI).
+Cuby can be used both as a Python library and through its command line interface (CLI).
 
 ### As a Python Library
 
-You can import the `load_cubes`, `load_datasource`, `generate_sql_query`, and `fetch_results` functions from their respective modules to use in your Python code.
+You can import the `load_cubes`, and `generate_sql_query` functions from their respective modules to use in your Python code.
 
 ### CLI Commands
 
-To list all models:
+To list all cubes:
 
 ```bash
-python -m dotcube.cli list_models
+cuby list_cubes
 ```
 
-To list all metrics for a model:
+To list all metrics for a cube:
 
 ```bash
-python -m dotcube.cli list_metrics <cube_name>
+cuby list_metrics <cube_name>
 ```
 
 To execute a query on a model:
 
 ```bash
-python -m dotcube.cli query <cube_name> "<query>"
+cuby query "<query_json>"
 ```
 
 The `query` command expects a JSON string as its argument. Here's an example:
 
 ```bash
-python -m dotcube.cli query cube1 "{'fields': ['booking_date', 'annual_recurring_revenue', 'churned_revenue'], 'filter': {'country_id': '45', 'product_brand': 'BIG'}, 'sorts': ['booking_date'], 'limit': 300}"
+cuby query "{'fields': ['orders.booking_date', 'annual_recurring_revenue', 'churned_revenue'], 'filter': {'country_id': '45', 'product_brand': 'BIG'}, 'sorts': ['booking_date'], 'limit': 300}"
 ```
 
 ## Defining Models
@@ -62,21 +65,9 @@ metrics:
   ...
 ```
 
-## Defining Datasources
-
-Datasources are defined in a `datasource.yml` file with the following structure:
-
-```yaml
-type: <database_type>
-host: <host>
-port: <port>
-database: <database_name>
-user: <username>
-password: <password>
-```
-
-Supported database types are PostgreSQL, Snowflake, Redshift, BigQuery, and Druid.
+Basically all SQL databases are supported: PostgreSQL, Snowflake, Redshift, BigQuery, Databricks SQL, Druid, ...
 
 ## Contributing
 
-If you have suggestions for how DotCube could be improved, or want to report a bug, open an issue! We'd love all and any contributions.
+If you have suggestions for how Cuby could be improved, or want to report a bug, open an issue! 
+We'd love all and any contributions.
