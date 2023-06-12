@@ -1,0 +1,63 @@
+cubes:
+  - name: orders
+    table: demo_db.public.orders
+    always_filter:
+      - "${table}.booking_date >= '2019-01-01'"
+      - "${table}.status = 'confirmed'"
+    dimensions:
+      - name: id
+        sql: ${table}.id
+        primary_key: true
+      - name: booking_date
+        sql: date_trunc(${time_frame},${table}.booking_date)
+        variants:
+          - time_frame: day, week, month, quarter, year
+      - name: country_id
+        sql: ${table}.country_id
+      - name: user_id
+        sql: ${table}.user_id
+    metrics:
+      - name: revenue
+        sql: sum(${table}.total)
+      - name: average_order_value
+        sql: avg(${table}.total)
+      - name: revenue_high_orders
+        sql: sum( iff(${table}.total > 10, ${table}.total, 0) )
+    window_metrics:
+      - name: average_order_value_rolling
+        sql: sum(${revenue}) over (order by ${booking_date_week} rows between 30 preceding and current row)
+
+  - name: orders_items
+    table: demo_db.public.orders_line_items
+    dimensions:
+      - name: id
+        sql: ${table}.id
+        primary_key: true
+      - name: order_id
+        sql: ${table}.order_id
+      - name: product_category
+        sql: ${table}.product_category
+    metrics:
+      - name: quantity
+        sql: sum(${table}.quantity)
+
+  - name: users
+    table: demo_db.public.users
+    dimensions:
+      - name: id
+        sql: ${table}.id
+        primary_key: true
+      - name: domain
+        sql: ${table}.domain
+      - name: sign_up
+        sql: ${table}.sign_up
+
+joins:
+  - type: left
+    left: orders
+    right: orders_items
+    on_sql: ${orders}.id = ${orders_line_items}.order_id
+  - type: inner
+    left: orders
+    right: users
+    on_sql: ${orders}.user_id = ${users}.id
