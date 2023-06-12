@@ -51,6 +51,10 @@ cubes:
         sql: ${table}.domain
       - name: sign_up
         sql: ${table}.sign_up
+    metrics:
+      - name: count
+        description: Count of users
+        sql: count(${table}.id)
 
 joins:
   - type: left

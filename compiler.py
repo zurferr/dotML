@@ -1,8 +1,8 @@
-import re
 import random
+import re
 import string
-from typing import Dict, List, Optional
 from string import Template
+from typing import Dict, List, Optional
 
 variable_pattern = re.compile(r"\$\{([a-zA-Z0-9_.]+)}")
 
@@ -59,12 +59,14 @@ def get_table_alias(table_name: str) -> str:
     table_alias = table_name.split('.')[-1] + '_' + random_part
     return table_alias
 
+
 def get_simple_variables(table_alias: str, cube_fields: Dict) -> Dict:
     field_variables = {cf: cube_fields[cf].get('sql') for cf in cube_fields}  # e.g ${revenue} - ${cost}
     # identifier_variables e.g. ${orders.total}, first replace to ${orders__total} should resolve to sql
     identifier_variables = {f"{table_alias}__{cf}": cube_fields[cf].get('sql') for cf in cube_fields}
     variables = {**{'table': table_alias}, **field_variables, **identifier_variables}
     return variables
+
 
 def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[str], limit: Optional[int]) -> str:
     """a simple query does not require joins"""
@@ -76,7 +78,7 @@ def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[
     # add fields variant fields
     cube_fields = expand_variants(cube_fields)
 
-    table_alias = get_table_alias(cube.get('table'))
+    table_alias = get_table_alias(cube.get('name'))
 
     variables = get_simple_variables(table_alias, cube_fields)
 
@@ -168,8 +170,37 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
     #         on orders.id = order_items.order_id
     #         group by 1, 2
     # )
-    # 1.1 get list of queried dimension fields per cube + primary key
-    # 1.2 create join expression for each cube
+    # 1.1 get list of queried dimension fields per cube
+    for cube in cubes:
+        queried_dimensions = []
+        for query_field in fields:
+            cube_name, field_name = query_field.split('.')
+            if cube_name == cube.get('name') and field_name in cube['dimensions']:
+                queried_dimensions.append(field_name)
+        cube['queried_dimensions'] = queried_dimensions
+
+    # 1.2 get primary key and alias of each cube
+    for cube in cubes:
+        cube['pk'] = [f for f in cube['dimensions'] if f.get('primary_key', False)]
+        if len(cube['pk']) == 0:
+            raise ValueError(f"Cube {cube.get('name')} has no primary key defined.")
+        cube['alias'] = get_table_alias(cube.get('name'))
+
+    # 1.3 build dimensional ctes
+    for cube in cubes:
+        primary_key_cols = ', '.join(f"{pkp.get('sql')} as pk{i}" for i, pkp in enumerate(cube['pk']))
+        join_expr = ...  # todo evaluate what are foreign queried dimensions and then join them
+
+        foreign_dimension_cols = ', '.join([f"{cube['alias']}.{d}" for d in cube['queried_dimensions']])
+        group_expr = ', '.join([f"{i + 1}" for i, pkp in enumerate(cube['pk'] + cube['queried_dimensions'])])
+        cte_dimension = f"""{cube['alias']}_dimension as (
+select  {primary_key_cols},
+        {foreign_dimension_cols}
+from {cube['table']} as {cube['alias']}
+group by {group_expr}
+)"""
+
+    # 1.3 create join expression for each cube
 
     select_expr_dim = ', '.join([f"{f.get('sql')} as {f.get('name')}" for f in cube['dimensions']])
 
