@@ -1,0 +1,49 @@
+cubes:
+  - name: orders
+    table: my_orders
+    always_filter:
+      - "${table}.booking_date >= '2019-01-01'"
+      - "${table}.status = 'confirmed'"
+    dimensions:
+      - name: id
+        sql: ${table}.id
+        primary_key: true
+      - name: booking_date
+        sql: strftime('${time_frame}',${table}.booking_date)
+        variants:
+          - time_frame:
+              - day: "%Y-%m-%d"
+              - month: "%Y-%m-01"
+              - year: "%Y-01-01"
+      - name: country_id
+        sql: ${table}.country_id
+    metrics:
+      - name: revenue
+        sql: sum(${table}.total)
+      - name: average_order_value
+        sql: avg(${table}.total)
+      - name: revenue_big_orders
+        sql: sum( iff(${table}.total > 100, ${table}.total, 0) )
+    window_metrics:
+      - name: average_order_value_rolling_30_days
+        sql: sum(${revenue}) over (order by ${booking_date_day} rows between 30 preceding and current row)
+
+  - name: orders_items
+    table: my_order_items
+    dimensions:
+      - name: id
+        sql: ${table}.id
+        primary_key: true
+      - name: order_id
+        sql: ${table}.order_id
+      - name: product
+        sql: ${table}.product_id
+    metrics:
+      - name: quantity
+        sql: sum(${table}.quantity)
+
+joins:
+  - type: left
+    left: orders
+    right: orders_items
+    on_sql: ${orders}.id = ${orders_items}.order_id

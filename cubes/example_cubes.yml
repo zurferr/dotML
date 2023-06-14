@@ -11,7 +11,7 @@ cubes:
       - name: booking_date
         sql: date_trunc(${time_frame},${table}.booking_date)
         variants:
-          - time_frame: day, week, month, quarter, year
+          - time_frame: [ day, week, month, quarter, year ]
       - name: country_id
         sql: ${table}.country_id
       - name: user_id

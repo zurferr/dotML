@@ -1,6 +1,7 @@
 import os
-import yaml
 from typing import Dict, List
+
+import yaml
 
 
 def load_cubes(file_path: str) -> Dict:
@@ -12,7 +13,7 @@ def load_cubes(file_path: str) -> Dict:
 def load_cube_configs(dir_path: str = "cubes") -> List[Dict]:
     cube_configs = []
     for file in os.listdir(dir_path):
-        if file.endswith(".yml"):
+        if file.endswith(".yaml"):
             cube_config = load_cubes(os.path.join(dir_path, file))
             cube_configs.append(cube_config)
     return cube_configs

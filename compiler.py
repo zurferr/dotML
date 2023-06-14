@@ -36,10 +36,17 @@ def expand_variants(cube_fields: Dict) -> Dict:
                 # variant is a dict with one key and a list of values
                 # extract the key as name and the values as list
                 variant_name = list(variant.keys())[0]
-                variant_values = variant[variant_name].split(', ')
+                variant_values = variant[variant_name]
                 for variant_value in variant_values:
+                    # if variant_value is a dict, extract they key as name and the value as sql
+                    if isinstance(variant_value, dict):
+                        key_name = list(variant_value.keys())[0]
+                        variant_value = variant_value[key_name]
+                    else:
+                        key_name = variant_value
+
                     variant_field = {
-                        'name': cube_field['name'] + '_' + str(variant_value),
+                        'name': cube_field['name'] + '_' + str(key_name),
                         'sql': substitute_variables(cube_field['sql'], {variant_name: str(variant_value)},
                                                     recursive=False),
                         'dim': cube_field['dim']
@@ -72,10 +79,10 @@ def get_cube_fields(cube: Dict) -> Dict:
     return cube_fields
 
 
-def get_simple_variables(table_alias: str, cube_fields: Dict) -> Dict:
+def get_simple_variables(table: str, table_alias: str, cube_fields: Dict) -> Dict:
     field_variables = {cf: cube_fields[cf].get('sql') for cf in cube_fields}  # e.g ${revenue} - ${cost}
     # identifier_variables e.g. ${orders.total}, first replace to ${orders__total} should resolve to sql
-    identifier_variables = {f"{table_alias}__{cf}": cube_fields[cf].get('sql') for cf in cube_fields}
+    identifier_variables = {f"{table}__{cf}": cube_fields[cf].get('sql') for cf in cube_fields}
     variables = {**{'table': table_alias}, **field_variables, **identifier_variables}
     return variables
 
@@ -90,7 +97,7 @@ def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[
 
     table_alias = get_table_alias(cube.get('name'))
 
-    variables = get_simple_variables(table_alias, cube_fields)
+    variables = get_simple_variables(cube.get('name'), table_alias, cube_fields)
 
     select_fields = []
     window_fields = []
@@ -184,7 +191,9 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
 
         cube['cube_fields'] = cube_fields
         cube['alias'] = get_table_alias(cube.get('name'))
-        cube['cube_vars'] = get_simple_variables(cube_fields=cube.get('cube_fields'), table_alias=cube.get('alias'))
+        cube['cube_vars'] = get_simple_variables(table=cube.get('name'),
+                                                 cube_fields=cube.get('cube_fields'),
+                                                 table_alias=cube.get('alias'))
 
         # get primary key of each cube
         cube['pk'] = [f for f in cube['dimensions'] if f.get('primary_key', False)]
@@ -380,8 +389,11 @@ def generate_sql_query(cubes_config: Dict, query: Dict) -> str:
             else:
                 for variant in cube_field['variants']:
                     variant_name = list(variant.keys())[0]
-                    variant_values = variant[variant_name].split(', ')
+                    variant_values = variant[variant_name]
                     for variant_value in variant_values:
+                        # if variant value is a dict, only take the first key
+                        if isinstance(variant_value, dict):
+                            variant_value = list(variant_value.keys())[0]
                         all_fields.append(cube['name'] + '.' + cube_field['name'] + '_' + str(variant_value))
 
     # Validate fields
