@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 variable_pattern = re.compile(r"\$\{([a-zA-Z0-9_.]+)}")
 
 
-def substitute_variables(template: str, variables: Dict, recursive=True) -> str:
+def substitute_variables(template: str, variables: Dict, recursive=True, i=0) -> str:
     # check if template contains variables
     if re.search(variable_pattern, template) is None:
         return template
@@ -16,7 +16,11 @@ def substitute_variables(template: str, variables: Dict, recursive=True) -> str:
         # Substitute the keys with their corresponding values
         compiled_string = t.safe_substitute(variables)
         if recursive and re.search(variable_pattern, compiled_string) is not None:  # do it recursively
-            compiled_string = substitute_variables(compiled_string, variables)
+            i = i + 1
+            if i > 10:
+                raise Exception(
+                    f'Recursive substitution of variables failed. Please check your variables: {compiled_string}')
+            compiled_string = substitute_variables(compiled_string, variables, i=i)
     return compiled_string
 
 
@@ -55,9 +59,17 @@ def expand_variants(cube_fields: Dict) -> Dict:
 
 def get_table_alias(table_name: str) -> str:
     # get last part of the table name and add random string to it
-    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=3))
     table_alias = table_name.split('.')[-1] + '_' + random_part
     return table_alias
+
+
+def get_cube_fields(cube: Dict) -> Dict:
+    cube_fields = {f['name']: {**f, 'dim': True} for f in cube.get('dimensions', [])}
+    cube_fields = {**cube_fields, **{f['name']: {**f, 'dim': False} for f in cube.get('metrics', [])}}
+    cube_fields = {**cube_fields,
+                   **{f['name']: {**f, 'dim': False, 'window': True} for f in cube.get('window_metrics', [])}}
+    return cube_fields
 
 
 def get_simple_variables(table_alias: str, cube_fields: Dict) -> Dict:
@@ -71,9 +83,7 @@ def get_simple_variables(table_alias: str, cube_fields: Dict) -> Dict:
 def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[str], limit: Optional[int]) -> str:
     """a simple query does not require joins"""
 
-    cube_fields = {f['name']: {**f, 'dim': True} for f in cube['dimensions']}
-    cube_fields = {**cube_fields, **{f['name']: {**f, 'dim': False} for f in cube['metrics']}}
-    cube_fields = {**cube_fields, **{f['name']: {**f, 'dim': False, 'window': True} for f in cube['window_metrics']}}
+    cube_fields = get_cube_fields(cube)
 
     # add fields variant fields
     cube_fields = expand_variants(cube_fields)
@@ -153,12 +163,46 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
     for join in joins:
         for cube in cubes:
             if cube['name'] == join['left'] or cube['name'] == join['right']:
-                cube['join'] = join
+                # append join to cube if not already there
+                if cube.get('join') is None:
+                    cube['join'] = [join]
+                else:
+                    cube['join'].append(join)
 
-    # check if all cubes have a join
+    # prepare all cubes
+    all_queried_dimensions = {}
+
     for cube in cubes:
+        # check if all cubes have a join
         if cube.get('join') is None:
             raise ValueError(f"Cube {cube.get('name')} has no join defined")
+        # also calculate all cube_fields
+        cube_fields = get_cube_fields(cube)
+
+        # add fields variant fields
+        cube_fields = expand_variants(cube_fields)
+
+        cube['cube_fields'] = cube_fields
+        cube['alias'] = get_table_alias(cube.get('name'))
+        cube['cube_vars'] = get_simple_variables(cube_fields=cube.get('cube_fields'), table_alias=cube.get('alias'))
+
+        # get primary key of each cube
+        cube['pk'] = [f for f in cube['dimensions'] if f.get('primary_key', False)]
+        if len(cube['pk']) == 0:
+            raise ValueError(f"Cube {cube.get('name')} has no primary key defined.")
+
+        # get list of queried dimensions in cube
+        queried_dimensions = {}
+        for query_field in fields:
+            cube_name, field_name = query_field.split('.')
+            if cube_name == cube.get('name') and field_name in cube['cube_fields'] and cube['cube_fields'][
+                field_name].get('dim'):
+                cube_field = cube['cube_fields'][field_name]
+                cube_field['cube'] = cube
+                cube_field['sql'] = substitute_variables(cube_field['sql'], cube.get('cube_vars'))
+                queried_dimensions[field_name] = cube_field
+                all_queried_dimensions[field_name] = cube_field
+        cube['queried_dimensions'] = queried_dimensions
 
     # 1. for each cube aggregate a helper cte with all required dimensions (based on primary key)
     # example query:
@@ -170,42 +214,145 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
     #         on orders.id = order_items.order_id
     #         group by 1, 2
     # )
-    # 1.1 get list of queried dimension fields per cube
-    for cube in cubes:
-        queried_dimensions = []
-        for query_field in fields:
-            cube_name, field_name = query_field.split('.')
-            if cube_name == cube.get('name') and field_name in cube['dimensions']:
-                queried_dimensions.append(field_name)
-        cube['queried_dimensions'] = queried_dimensions
+    join_vars = {cube.get('name'): cube.get('alias') for cube in cubes}
 
-    # 1.2 get primary key and alias of each cube
+    ctes_dim = []
     for cube in cubes:
-        cube['pk'] = [f for f in cube['dimensions'] if f.get('primary_key', False)]
-        if len(cube['pk']) == 0:
-            raise ValueError(f"Cube {cube.get('name')} has no primary key defined.")
-        cube['alias'] = get_table_alias(cube.get('name'))
+        primary_key_cols = [f"{substitute_variables(pkp.get('sql'), cube.get('cube_vars'))} as pk{i}" for i, pkp in
+                            enumerate(cube['pk'])]
 
-    # 1.3 build dimensional ctes
-    for cube in cubes:
-        primary_key_cols = ', '.join(f"{pkp.get('sql')} as pk{i}" for i, pkp in enumerate(cube['pk']))
-        join_expr = ...  # todo evaluate what are foreign queried dimensions and then join them
+        needed_join_partners = {}
+        foreign_dimension_cols = []
+        cube['exposing_dimension_col_names'] = []
+        for qdim in all_queried_dimensions:
+            # foreign dimension is a dimension that is not part of this cube
+            if qdim not in cube['cube_fields']:
+                qdim_dict = all_queried_dimensions.get(qdim)
+                foreign_dimension_cols.append(
+                    f"{qdim_dict.get('sql')} as {qdim_dict.get('name')}")
+                needed_join_partners[qdim_dict.get('cube').get('name')] = qdim_dict.get('cube')
+                cube['exposing_dimension_col_names'].append(f"{cube.get('alias')}_dimension.{qdim_dict.get('name')}")
 
-        foreign_dimension_cols = ', '.join([f"{cube['alias']}.{d}" for d in cube['queried_dimensions']])
-        group_expr = ', '.join([f"{i + 1}" for i, pkp in enumerate(cube['pk'] + cube['queried_dimensions'])])
+        # evaluate what are foreign queried dimensions and then join them
+        from_expr = f"from {cube['table']} as {cube['alias']} "
+        if len(needed_join_partners) > 0:
+            for needed_cube_name in needed_join_partners:
+                needed_cube = needed_join_partners[needed_cube_name]
+                for join in needed_cube.get('join'):
+                    # only join direct partners and only needed cubes
+                    left_is_cube = join.get('left') == cube['name']
+                    right_is_cube = join.get('right') == cube['name']
+                    other_cube = join.get('left') if right_is_cube else join.get('right')
+                    other_cube_is_needed = other_cube in needed_join_partners
+                    if other_cube_is_needed and (left_is_cube or right_is_cube):
+                        join_type = join.get('type')
+                        if right_is_cube:
+                            join_type = join.get('type')  # reverse direction
+                            join_type = 'left' if join_type == 'right' else join_type
+                            join_type = 'right' if join_type == 'left' else join_type
+
+                        on_sql = substitute_variables(join.get('on_sql'), join_vars, recursive=False)
+                        from_expr += f""" {join_type} join {needed_cube.get('table')} as {needed_cube.get('alias')}
+                        on {on_sql}"""
+
+        group_expr = ', '.join([f"{i + 1}" for i, _ in enumerate(primary_key_cols + foreign_dimension_cols)])
+        select_expr = ',\n'.join(primary_key_cols + foreign_dimension_cols)
+
         cte_dimension = f"""{cube['alias']}_dimension as (
-select  {primary_key_cols},
-        {foreign_dimension_cols}
-from {cube['table']} as {cube['alias']}
+select  {select_expr}
+{from_expr}
 group by {group_expr}
 )"""
-
-    # 1.3 create join expression for each cube
-
-    select_expr_dim = ', '.join([f"{f.get('sql')} as {f.get('name')}" for f in cube['dimensions']])
+        ctes_dim.append(cte_dimension)
+    print(ctes_dim)
 
     # 2. join the helper cte with a cte for each cubes metrics
+    # example query:-- join foreign dimensions to cube, and calculate the cube alone
+    # order_metrics as (
+    #     select
+    #         order_dimension.product_category as product_category,
+    #         orders.country as country,
+    #         sum(orders.total) as revenue
+    #     from orders
+    #     join order_dimension
+    #     on orders.id = order_dimension.pk
+    #     group by 1, 2
+    # ),
+
+    ctes_metrics = []
+    for cube in cubes:
+        # get all metrics that are queried
+        queried_fields = {}
+        for query_field in fields:
+            cube_name, field_name = query_field.split('.')
+            if cube_name == cube.get('name') and field_name in cube['cube_fields']:
+                cube_field = cube['cube_fields'][field_name]
+                cube_field['cube'] = cube
+                cube_field['sql'] = substitute_variables(cube_field['sql'], cube.get('cube_vars'))
+                queried_fields[field_name] = cube_field
+
+        # create select and group by expressions
+        cube_expressions = [f"{substitute_variables(m.get('sql'), cube.get('cube_vars'))} as {m.get('name')}" for m in
+                            queried_fields.values() if not m.get('window')]  # todo add window functions
+        select_expr = ',\n'.join(cube['exposing_dimension_col_names'] + cube_expressions)
+        cube['exposing_metrics_col_names'] = [m.get('name') for m in queried_fields.values() if not m.get('window')]
+
+        # join metrics with dimension cte name
+        # on primary key fields
+        from_expr = f"""from {cube['table']} as {cube['alias']} 
+        join {cube['alias']}_dimension as {cube['alias']}_dimension 
+        on {cube['alias']}.id = {cube['alias']}_dimension.pk0"""  # todo right now only 1 primary key is supported
+
+        # get the position of the dimension fields in the select expression
+        dim_positions = [i + len(cube['exposing_dimension_col_names']) for i, sf in
+                         enumerate(queried_fields.values()) if sf.get('dim')]
+        exposing_positions = [i for i, _ in enumerate(cube['exposing_dimension_col_names'])]
+        group_expr = ', '.join(f"{p + 1}" for p in (exposing_positions + dim_positions))
+
+        cte_metrics = f"""{cube['alias']}_metrics as (
+select  {select_expr}
+{from_expr}
+group by {group_expr}
+)"""
+        ctes_metrics.append(cte_metrics)
+    print(ctes_metrics)
+
     # 3. join all cte's together
+    # example query:
+    # select -- join on the dimensions of the query
+    #     a.product_category,
+    #     a.country,
+    #     a.revenue,
+    #     b.quantity
+    # from order_metrics a
+    # join order_items_metrics b
+    # on a.booking_date = a.booking_date and b.country = b.country
+
+    select_expr = ''
+    # join column names are queried dimensions
+    on_join_part_template = ' and '.join(
+        [f"${{left}}.{dname} = ${{right}}.{dname}" for dname in all_queried_dimensions])
+    from_expr = 'from '  # + ' join '.join([f"{cube['alias']}_metrics as {cube['alias']}_metrics" for cube in cubes])
+    select_expr_parts = []
+    for cube in cubes:
+        select_expr_parts.extend([f"{cube.get('alias')}_metrics.{f}" for f in cube['exposing_metrics_col_names']])
+        cube['from_expr_part'] = f"{cube['alias']}_metrics as {cube['alias']}_metrics"
+
+    select_expr = ', '.join(select_expr_parts)
+    for i, cube in enumerate(cubes):
+        if i == 0:  # first cube is handled differently
+            from_expr += cube['from_expr_part']
+        else:
+            # todo all joins are done on the first cube todo overthink this
+            from_expr += f"""\njoin {cube['from_expr_part']} 
+    on {substitute_variables(on_join_part_template, {
+                'left': cubes[0].get('alias'),
+                'right': cube.get('alias')
+            })}"""
+
+    query = f"""with {', '.join(ctes_dim + ctes_metrics)}
+select {select_expr} 
+{from_expr}"""
 
     return query
 

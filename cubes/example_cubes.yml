@@ -60,7 +60,7 @@ joins:
   - type: left
     left: orders
     right: orders_items
-    on_sql: ${orders}.id = ${orders_line_items}.order_id
+    on_sql: ${orders}.id = ${orders_items}.order_id
   - type: inner
     left: orders
     right: users
