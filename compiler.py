@@ -163,7 +163,7 @@ from {table_alias}_base"""
 
 
 def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters: List[str], sorts: List[str],
-               limit: Optional[int]) -> str:
+               limit: Optional[int], all_query_fields: List[str]) -> str:
     """multi cube query require joins that handle fan out problem"""
     query = ""
     # check if cubes are connected with a join, otherwise throw an error
@@ -202,7 +202,7 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
 
         # get list of queried dimensions in cube
         queried_dimensions = {}
-        for query_field in fields:
+        for query_field in all_query_fields:
             cube_name, field_name = query_field.split('.')
             if cube_name == cube.get('name') and field_name in cube['cube_fields'] and cube['cube_fields'][
                 field_name].get('dim'):
@@ -292,7 +292,7 @@ group by {group_expr}
     for cube in cubes:
         # get all metrics that are queried
         queried_fields = {}
-        for query_field in fields:
+        for query_field in all_query_fields:
             cube_name, field_name = query_field.split('.')
             if cube_name == cube.get('name') and field_name in cube['cube_fields']:
                 cube_field = cube['cube_fields'][field_name]
@@ -345,6 +345,11 @@ group by {group_expr}
     select_expr_parts = []
     for cube in cubes:
         select_expr_parts.extend([f"{cube.get('alias')}_metrics.{f}" for f in cube['exposing_metrics_col_names']])
+        for f in cube['exposing_metrics_col_names']:  # only select queried fields
+            orginal_field_name = f"{cube.get('name')}.{f}"
+            if orginal_field_name in fields:
+                cube['exposing_dimension_col_names'].append(f)
+
         cube['from_expr_part'] = f"{cube['alias']}_metrics as {cube['alias']}_metrics"
 
     select_expr = ', '.join(select_expr_parts)
@@ -355,13 +360,53 @@ group by {group_expr}
             # todo all joins are done on the first cube todo overthink this
             from_expr += f"""\njoin {cube['from_expr_part']} 
     on {substitute_variables(on_join_part_template, {
-                'left': cubes[0].get('alias'),
-                'right': cube.get('alias')
+                'left': cubes[0].get('alias') + '_metrics',
+                'right': cube.get('alias') + '_metrics'
             })}"""
+
+    # 4. add filters & sorts
+    cube_name_alias_map = {cube.get('name'): cube.get('alias') + '_metrics' for cube in cubes}
+
+    where_expr = ''
+    if filters:
+        all_cube_vars = {}
+        for cube in cubes:
+            cube_vars = cube.get('cube_vars')
+            # substitute all cube values with its variables first
+            new_cube_vars = {}
+            for k, v in cube_vars.items():
+                new_cube_vars[k] = substitute_variables(v, cube.get('cube_vars'))
+
+            all_cube_vars.update(new_cube_vars)
+
+        where_expr = 'where '
+        where_expr += ' and '.join([f"({substitute_variables(f.replace('.', '__'), all_cube_vars)})" for f in filters])
+
+        for cube in cubes:
+            cube_alias = cube.get('alias')
+            cube_alias_extension = cube_alias.split('.')[0] + '_metrics'
+            where_expr = where_expr.replace(cube_alias, cube_alias_extension)
+
+    order_expr = ''
+    if sorts:
+        sort_exprs = []
+        for sort in sorts:
+            cube_name, field_name = sort.split('.')
+            cube_alias = cube_name_alias_map.get(cube_name)
+            sort_exprs.append(f"{cube_alias}.{field_name}")
+
+        order_expr = 'order by ' + ', '.join(sort_exprs)
+
+    limit_expr = ''
+    if limit:
+        limit_expr = f"limit {limit}"
 
     query = f"""with {', '.join(ctes_dim + ctes_metrics)}
 select {select_expr} 
-{from_expr}"""
+{from_expr}
+{where_expr}
+{order_expr}
+{limit_expr}"""
 
     return query
 
@@ -371,9 +416,9 @@ def generate_sql_query(cubes_config: Dict, query: Dict) -> str:
 
     # read query
     fields = query['fields']
-    filters = query['filters']
-    sorts = query['sorts']
-    limit = query['limit']
+    filters = query.get('filters', [])
+    sorts = query.get('sorts', [])
+    limit = query.get('limit', 5000)
 
     # read cubes
     cubes = cubes_config.get('cubes', {})
@@ -423,4 +468,4 @@ def generate_sql_query(cubes_config: Dict, query: Dict) -> str:
         return simple_query(cube, fields, filters, sorts, limit)
     else:
         cubes = [cube for cube in cubes if cube.get('name') in needed_cubes]
-        return join_query(cubes, joins, fields, filters, sorts, limit)
+        return join_query(cubes, joins, fields, filters, sorts, limit, all_query_fields)

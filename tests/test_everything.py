@@ -95,7 +95,7 @@ class MyTestCase(unittest.TestCase):
         sql = generate_sql_query(cube_configs[0], query)
         print(sql)
         result = self.execute_against_dummy_data(sql)
-        self.assertEqual(len(result[0]), 10)
+        self.assertEqual(len(result), 10)
 
     def test_complex_query(self):
         # query = {
@@ -109,11 +109,14 @@ class MyTestCase(unittest.TestCase):
             "fields": ["orders.booking_date_month", "orders.revenue", "orders_items.quantity"],
             "filters": ["${orders.country_id} = '67'"],
             "sorts": ["orders.booking_date_month"],
-            "limit": 100
+            # "limit": 2
         }
         cube_configs = load_cube_configs(dir_path="../cubes")
         sql = generate_sql_query(cube_configs[0], query)
         print(sql)
+        result = self.execute_against_dummy_data(sql)
+        print(result)
+        self.assertEqual(len(result), 3)
 
 
 if __name__ == '__main__':

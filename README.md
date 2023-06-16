@@ -115,27 +115,33 @@ Oracle, MSSQL ...
 Let's say we have an online store with the following tables.
 
 ```sql
-CREATE TABLE orders (
-  id INT PRIMARY KEY,
-  booking_date DATE,
-  country_id INT,
-  status VARCHAR(255),
-  total INT
+CREATE TABLE orders
+(
+    id           INT PRIMARY KEY,
+    booking_date DATE,
+    country_id   INT,
+    status       VARCHAR(255),
+    total        INT
 );
 ```
 
+![img_1.png](img_1.png)
+
 ```sql
-CREATE TABLE order_items (
-    id INT PRIMARY KEY,
-    order_id INT,
+CREATE TABLE order_items
+(
+    id         INT PRIMARY KEY,
+    order_id   INT,
     product_id INT,
-    quantity INT,
-    price INT
-    );
+    quantity   INT,
+    price      INT
+);
 ```
 
-Our data model would look like this.
+![img.png](img.png)
 
+Each table gets modeled as a cube in Cuby.
+A cube encodes the business logic on how data should be aggregated in dimensions and metrics.
 ```yaml
 cubes:
   - name: orders
@@ -180,6 +186,9 @@ cubes:
 ```
 
 Now, we can query the data model with Cuby.
+💡 Notice how we are querying metrics across different cubes.  
+Cuby automatically
+prevents [join fanouts](https://www.googlecloudcommunity.com/gc/Technical-Tips-Tricks/The-problem-of-SQL-fanouts/ta-p/587483)
 
 ```python
 from cuby import load_cubes, generate_sql_query
