@@ -248,14 +248,13 @@ with orders_R5S_dimension as (
 select 
     orders_R5S_metrics.booking_date_month, 
     orders_R5S_metrics.revenue, 
-    orders_items_0B7_metrics.quantity 
+    orders_items_0B7_metrics.quantity
 from orders_R5S_metrics as orders_R5S_metrics
 join orders_items_0B7_metrics as orders_items_0B7_metrics
     on orders_R5S.booking_date_month = orders_items_0B7.booking_date_month 
     and orders_R5S.country_id = orders_items_0B7.country_id
 where (orders_R5S_metrics.country_id = '67')
-order by 1
-limit 100
+order by 1 limit 100
 ```
 
 ## Contributing
@@ -263,6 +262,9 @@ limit 100
 If you have suggestions for how Cuby could be improved, or want to report a bug, open an issue!
 We'd love all and any contributions.
 
-One area where we would especially appreciate help is a Tableau compiler, so that Cuby cubes can be used as a data
-source in Tableau.
-Reach out to: hi@sled.so
+Two areas where we would especially appreciate help are:
+
+- a Tableau compiler, so that Cuby cubes can be used as a data
+  source in Tableau (or another BI tool, you care about)
+- a dbt_package_wrapper, so that cubes can get materialized by dbt
+  Reach out to: hi@sled.so
