@@ -1,8 +1,8 @@
 ![DotCube](assets/dotcube.png)
 
 # Cuby
-(in alpha)
-Cuby is a lightweight semantic layer with minimal abstractions.  
+
+Cuby (currently in alpha) is a lightweight semantic layer with minimal abstractions.  
 It enables fetching metrics, filtered by dimensions, by parsing metric queries based on a data model.  
 The data model defines dimensions and metrics similar to LookML and supports joins on primary keys.  
 The data model is defined in YAML files.  
