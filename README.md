@@ -1,12 +1,12 @@
 ![DotCube](assets/dotcube.png)
 
 # Cuby
-⚠️ still in alpha ⚠️
-Cuby is a lightweight semantic layer with minimal abstractions.
-It enables fetching metrics, filtered by dimensions, by parsing metric queries based on a data model.
-The data model defines dimensions and metrics similar to LookML and supports joins on primary keys.
-The data model is defined in YAML files.
-The package generates a SQL query that you can use to fetch your results.
+(in alpha)
+Cuby is a lightweight semantic layer with minimal abstractions.  
+It enables fetching metrics, filtered by dimensions, by parsing metric queries based on a data model.  
+The data model defines dimensions and metrics similar to LookML and supports joins on primary keys.  
+The data model is defined in YAML files.  
+The package generates a SQL query that you can use to fetch your results.  
 
 ## Installation
 
@@ -267,4 +267,5 @@ Two areas where we would especially appreciate help are:
 - a Tableau compiler, so that Cuby cubes can be used as a data
   source in Tableau (or another BI tool, you care about)
 - a dbt_package_wrapper, so that cubes can get materialized by dbt
-  Reach out to: hi@sled.so
+
+Reach out to: hi@sled.so
