@@ -183,10 +183,10 @@ cubes:
         sql: sum(${table}.quantity)
 ```
 
-Now, we can query the data model with Cuby.
-💡 Notice how we are querying metrics across different cubes.  
+Now, we can query the data model with Cuby.  
+*Notice how we are querying metrics across different cubes.  
 Cuby automatically
-prevents [join fanouts](https://www.googlecloudcommunity.com/gc/Technical-Tips-Tricks/The-problem-of-SQL-fanouts/ta-p/587483)
+prevents [join fanouts](https://www.googlecloudcommunity.com/gc/Technical-Tips-Tricks/The-problem-of-SQL-fanouts/ta-p/587483)*
 
 ```python
 from cuby import load_cubes, generate_sql_query
@@ -199,14 +199,18 @@ query = {
     "limit": 100
 }
 sql_query = generate_sql_query(cubes, query)
-print(sql_query)
+# here you can execute the sql query with your favorite database client
 ```
 
-The result:
+The result looks like this:
 
-```sql
-```
+| booking_date_month | revenue | quantity |
+|:-------------------|:--------|:---------|
+| 2023-04-01         | 802     | 125      |
+| 2023-05-01         | 1329    | 212      |
+| 2023-06-01         | 1689    | 158      |
 
+---
 The generated SQL query looks like this:
 
 ```sql
