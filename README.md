@@ -114,31 +114,29 @@ Oracle, MSSQL ...
 
 Let's say we have an online store with the following tables.
 
-```sql
-CREATE TABLE orders
-(
-    id           INT PRIMARY KEY,
-    booking_date DATE,
-    country_id   INT,
-    status       VARCHAR(255),
-    total        INT
-);
-```
+### Orders
 
-![img_1.png](img_1.png)
+| id | booking\_date | country\_id | status    | total |
+|:---|:--------------|:------------|:----------|:------|
+| 1  | 2023-05-12    | 68          | cancelled | 109   |
+| 2  | 2023-06-02    | 62          | cancelled | 32    |
+| 3  | 2023-04-20    | 67          | confirmed | 213   |
+| 4  | 2023-04-30    | 64          | cancelled | 22    |
+| 5  | 2023-04-28    | 65          | delivered | 5     |
+| 6  | 2023-06-13    | 69          | shipped   | 98    |
+| 7  | 2023-04-17    | 62          | delivered | 30    |
 
-```sql
-CREATE TABLE order_items
-(
-    id         INT PRIMARY KEY,
-    order_id   INT,
-    product_id INT,
-    quantity   INT,
-    price      INT
-);
-```
+### Orders Items
 
-![img.png](img.png)
+| id | order\_id | product\_id | quantity | price |
+|:---|:----------|:------------|:---------|:------|
+| 10 | 1         | 8           | 9        | 26    |
+| 20 | 2         | 15          | 8        | 91    |
+| 21 | 2         | 2           | 3        | 20    |
+| 30 | 3         | 19          | 9        | 5     |
+| 31 | 3         | 13          | 10       | 71    |
+| 32 | 3         | 15          | 4        | 26    |
+| 40 | 4         | 17          | 9        | 10    |
 
 Each table gets modeled as a cube in Cuby.
 A cube encodes the business logic on how data should be aggregated in dimensions and metrics.
