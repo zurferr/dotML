@@ -25,28 +25,27 @@ code.
 
 ### CLI Commands
 
-To list all cubes:
-
 ```bash
-dotML list_cubes
+# list all cubes
+dotml cubes
+
+# list all metrics for a cube
+dotml fields <cube_name>
+
+# query a set of metrics and dimensions
+dotml query "<query_json>"
 ```
 
-To list all metrics for a cube:
+
+The `query` command expects a JSON5 string as its argument. Here's an example:
 
 ```bash
-dotML list_metrics <cube_name>
-```
-
-To execute a query on a model:
-
-```bash
-dotML query "<query_json>"
-```
-
-The `query` command expects a JSON string as its argument. Here's an example:
-
-```bash
-dotML query "{'fields': ['orders.booking_date', 'annual_recurring_revenue', 'churned_revenue'], 'filter': {'country_id': '45', 'product_brand': 'BIG'}, 'sorts': ['booking_date'], 'limit': 300}"
+dotml query "{
+'fields': ['orders.booking_date_month', 'orders.revenue', 'orders_items.quantity'],
+'filters': ['${orders.country_id} = 67'],
+'sorts': ['orders.booking_date_month'],
+'limit': 100
+}"
 ```
 
 ## Is this for me?

@@ -12,12 +12,13 @@ setup(
     packages=find_packages(),
     entry_points={
         'console_scripts': [
-            'dotml = dotML.cli:app',
+            'dotml = cli:app',
         ],
     },
     install_requires=[
         'pyyaml',
-        'typer'
+        'typer',
+        'json5',
     ],
     long_description=long_description,
     long_description_content_type='text/markdown',
