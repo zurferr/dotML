@@ -7,12 +7,12 @@ with open(os.path.join(os.path.dirname(__file__), 'README.md'), encoding='utf-8'
     long_description = f.read()
 
 setup(
-    name='cuby',
+    name='dotml',
     version='0.1',
     packages=find_packages(),
     entry_points={
         'console_scripts': [
-            'cuby = cuby.cli:app',
+            'dotml = dotML.cli:app',
         ],
     },
     install_requires=[

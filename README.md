@@ -1,22 +1,22 @@
 ![DotCube](assets/dotcube.png)
 
-# Cuby
-
-Cuby (currently in alpha) is a lightweight semantic layer with minimal abstractions.  
-It enables fetching metrics, filtered by dimensions, by parsing metric queries based on a data model.  
-The data model defines dimensions and metrics similar to LookML and supports joins on primary keys.  
-The data model is defined in YAML files.  
-The package generates a SQL query that you can use to fetch your results.  
+# dotML
+⚠️ still in alpha ⚠️
+dotML is a lightweight semantic layer with minimal abstractions.
+It enables fetching metrics, filtered by dimensions, by parsing metric queries based on a data model.
+The data model defines dimensions and metrics similar to LookML and supports joins on primary keys.
+The data model is defined in YAML files.
+The package generates a SQL query that you can use to fetch your results.
 
 ## Installation
 
 ```bash
-pip install cuby
+pip install dotml
 ```
 
 ## Usage
 
-Cuby can be used both as a Python package and through its command line interface.
+dotML can be used both as a Python package and through its command line interface.
 
 ### As a Python Library
 
@@ -28,42 +28,42 @@ code.
 To list all cubes:
 
 ```bash
-cuby list_cubes
+dotML list_cubes
 ```
 
 To list all metrics for a cube:
 
 ```bash
-cuby list_metrics <cube_name>
+dotML list_metrics <cube_name>
 ```
 
 To execute a query on a model:
 
 ```bash
-cuby query "<query_json>"
+dotML query "<query_json>"
 ```
 
 The `query` command expects a JSON string as its argument. Here's an example:
 
 ```bash
-cuby query "{'fields': ['orders.booking_date', 'annual_recurring_revenue', 'churned_revenue'], 'filter': {'country_id': '45', 'product_brand': 'BIG'}, 'sorts': ['booking_date'], 'limit': 300}"
+dotML query "{'fields': ['orders.booking_date', 'annual_recurring_revenue', 'churned_revenue'], 'filter': {'country_id': '45', 'product_brand': 'BIG'}, 'sorts': ['booking_date'], 'limit': 300}"
 ```
 
 ## Is this for me?
 
-Cuby is for you if are a tool builder and want to:
+dotML is for you if are a tool builder and want to:
 
 1. query metrics and dimensions consistently and correctly
 2. want to support highly flexible analytics without writing complex SQL
 
-We build Cuby for [Dot](https://getdot.ai), but believe it can be useful for other tool builders as well.
+We build dotML for [Dot](https://getdot.ai), but believe it can be useful for other tool builders as well.
 
-In the future, Cuby might also be for you if you are a data analyst and want to:
+In the future, dotML might also be for you if you are a data analyst and want to:
 
 1. have consistent metrics across all your tools
 2. implement a semantic layer for your data warehouse
 
-## Why Cuby?
+## Why dotML?
 
 OLAP cubes, hypercubes, metric stores and semantic layers are all different names for the same thing: a data model that
 defines dimensions and metrics, and a query engine that can parse metric queries and generate SQL queries to fetch the
@@ -78,10 +78,10 @@ There is a chance that dbt's [metricflow](https://github.com/dbt-labs/metricflow
 
 1. it does not have a permissive license for tool builders,
 2. is still in beta and,
-3. is pretty complex: 1359 files vs 12 files of cuby
+3. is pretty complex: 1359 files vs 12 files of dotML
 4. seems harder to learn, because of more abstractions in the data model
 
-However, Cuby only produces sql queries based on the defined data model.
+However, dotML only produces sql queries based on the defined data model.
 There is no UI, no caching, and no permissions.
 
 today it does:
@@ -138,7 +138,7 @@ Let's say we have an online store with the following tables.
 | 32 | 3         | 15          | 4        | 26    |
 | 40 | 4         | 17          | 9        | 10    |
 
-Each table gets modeled as a cube in Cuby.
+Each table gets modeled as a cube in dotML.
 A cube encodes the business logic on how data should be aggregated in dimensions and metrics.
 ```yaml
 cubes:
@@ -183,13 +183,13 @@ cubes:
         sql: sum(${table}.quantity)
 ```
 
-Now, we can query the data model with Cuby.  
+Now, we can query the data model with dotML.  
 *Notice how we are querying metrics across different cubes.  
-Cuby automatically
+dotML automatically
 prevents [join fanouts](https://www.googlecloudcommunity.com/gc/Technical-Tips-Tricks/The-problem-of-SQL-fanouts/ta-p/587483)*
 
 ```python
-from cuby import load_cubes, generate_sql_query
+from dotML import load_cubes, generate_sql_query
 
 cubes = load_cubes("data_model.yaml")
 query = {
@@ -259,12 +259,12 @@ order by 1 limit 100
 
 ## Contributing
 
-If you have suggestions for how Cuby could be improved, or want to report a bug, open an issue!
+If you have suggestions for how dotML could be improved, or want to report a bug, open an issue!
 We'd love all and any contributions.
 
 Two areas where we would especially appreciate help are:
 
-- a Tableau compiler, so that Cuby cubes can be used as a data
+- a Tableau compiler, so that dotML cubes can be used as a data
   source in Tableau (or another BI tool, you care about)
 - a dbt_package_wrapper, so that cubes can get materialized by dbt
 
