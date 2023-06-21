@@ -121,9 +121,15 @@ def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[
     from_expr = f"{cube.get('table')} as {table_alias}"
 
     # add filters and where clause
+    always_filters = cube.get('always_filter', [])
+    always_filters = [substitute_variables(f, variables) for f in always_filters]
+
     where_expr = None
     if len(filters) > 0:
-        where_expr = ' and '.join([f"({substitute_variables(f.replace('.', '__'), variables)})" for f in filters])
+        sub_filters = [f"({substitute_variables(f.replace('.', '__'), variables)})" for f in filters or []]
+
+    if len(sub_filters) > 0 or len(always_filters) > 0:
+        where_expr = ' and '.join(sub_filters + always_filters)
 
     # get the positions of the dim fields in the select_fields
     group_expr = None
@@ -194,6 +200,8 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
         cube['cube_vars'] = get_simple_variables(table=cube.get('name'),
                                                  cube_fields=cube.get('cube_fields'),
                                                  table_alias=cube.get('alias'))
+        cube['always_where_conditions'] = [substitute_variables(af, cube['cube_vars']) for af in
+                                           cube.get('always_filter', [])]
 
         # get primary key of each cube
         cube['pk'] = [f for f in cube['dimensions'] if f.get('primary_key', False)]
@@ -244,6 +252,9 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
 
         # evaluate what are foreign queried dimensions and then join them
         from_expr = f"from {cube['table']} as {cube['alias']} "
+        where_expr = ""
+        if cube.get('always_where_conditions') is not None and len(cube.get('always_where_conditions')) > 0:
+            where_expr = " and ".join(cube.get('always_where_conditions'))
         if len(needed_join_partners) > 0:
             for needed_cube_name in needed_join_partners:
                 needed_cube = needed_join_partners[needed_cube_name]
@@ -263,6 +274,13 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
                         on_sql = substitute_variables(join.get('on_sql'), join_vars, recursive=False)
                         from_expr += f""" {join_type} join {needed_cube.get('table')} as {needed_cube.get('alias')}
                         on {on_sql}"""
+                        if needed_cube.get('always_where_conditions') is not None and len(
+                                cube.get('always_where_conditions')) > 0:
+                            additional_where_expr = " and ".join(needed_cube.get('always_where_conditions'))
+                            where_expr = f"{where_expr} and {additional_where_expr}" if where_expr != "" else additional_where_expr
+
+        if where_expr != "":
+            where_expr = f"where {where_expr}"
 
         group_expr = ', '.join([f"{i + 1}" for i, _ in enumerate(primary_key_cols + foreign_dimension_cols)])
         select_expr = ',\n'.join(primary_key_cols + foreign_dimension_cols)
@@ -270,6 +288,7 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
         cte_dimension = f"""{cube['alias']}_dimension as (
 select  {select_expr}
 {from_expr}
+{where_expr}
 group by {group_expr}
 )"""
         ctes_dim.append(cte_dimension)
@@ -312,6 +331,11 @@ group by {group_expr}
         join {cube['alias']}_dimension as {cube['alias']}_dimension 
         on {cube['alias']}.id = {cube['alias']}_dimension.pk0"""  # todo right now only 1 primary key is supported
 
+        # add where conditions
+        where_expr = ""
+        if cube.get('always_where_conditions') is not None and len(cube.get('always_where_conditions')) > 0:
+            where_expr = "where " + " and ".join(cube.get('always_where_conditions'))
+
         # get the position of the dimension fields in the select expression
         dim_positions = [i + len(cube['exposing_dimension_col_names']) for i, sf in
                          enumerate(queried_fields.values()) if sf.get('dim')]
@@ -321,6 +345,7 @@ group by {group_expr}
         cte_metrics = f"""{cube['alias']}_metrics as (
 select  {select_expr}
 {from_expr}
+{where_expr}
 group by {group_expr}
 )"""
         ctes_metrics.append(cte_metrics)
@@ -350,7 +375,7 @@ group by {group_expr}
             if orginal_field_name in fields:
                 cube['exposing_dimension_col_names'].append(f)
 
-        cube['from_expr_part'] = f"{cube['alias']}_metrics as {cube['alias']}_metrics"
+        cube['from_expr_part'] = f"{cube['alias']}_metrics"
 
     select_expr = ', '.join(select_expr_parts)
     for i, cube in enumerate(cubes):

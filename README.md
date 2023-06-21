@@ -83,7 +83,7 @@ There is a chance that dbt's [metricflow](https://github.com/dbt-labs/metricflow
 However, dotML only produces sql queries based on the defined data model.
 There is no UI, no caching, and no permissions.
 
-today it does:
+Today it does:
 
 1. support joins on primary keys
 2. nested metrics and dimensions
