@@ -78,6 +78,12 @@ def get_cube_fields(cube: Dict) -> Dict:
                    **{f['name']: {**f, 'dim': False, 'window': True} for f in cube.get('window_metrics', [])}}
     return cube_fields
 
+def get_compiled_cube_fields(cube: Dict) -> dict:
+    cube_fields = get_cube_fields(cube)
+    # expand variants
+    cube_fields = expand_variants(cube_fields)
+    # return list of field names
+    return cube_fields
 
 def get_simple_variables(table: str, table_alias: str, cube_fields: Dict) -> Dict:
     field_variables = {cf: cube_fields[cf].get('sql') for cf in cube_fields}  # e.g ${revenue} - ${cost}
