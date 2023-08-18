@@ -1,10 +1,12 @@
-import typer
 import os
-import json5 as json
-from cube import load_cube_configs
-from compiler import generate_sql_query
-from typing_extensions import Annotated
 from typing import Optional
+
+import json5 as json
+import typer
+from typing_extensions import Annotated
+
+from compiler import generate_sql_query
+from cube import load_cube_configs
 
 app = typer.Typer()
 
@@ -24,7 +26,7 @@ def get_first_cubes(path: Optional[str]) -> dict:
 @app.command()
 def cubes(path: Annotated[Optional[str], typer.Argument()] = None):
     cubes = get_first_cubes(path)
-    if len(r_cubes) > 0:
+    if len(cubes) > 0:
         typer.echo('\n'.join([cube.get('name', '') for cube in cubes.get('cubes', [])]))
 
 
@@ -32,7 +34,7 @@ def cubes(path: Annotated[Optional[str], typer.Argument()] = None):
 @app.command()
 def fields(cube_name: str, path: Annotated[Optional[str], typer.Argument()] = None):
     cubes = get_first_cubes(path)
-    if len(r_cubes) > 0:
+    if len(cubes) > 0:
         cube = [cube for cube in cubes.get('cubes', []) if cube.get('name') == cube_name]
         if len(cube) > 0:
             fields = cube[0].get('dimensions', []) + cube[0].get('metrics', []) + cube[0].get('window_metrics', [])
