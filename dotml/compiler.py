@@ -64,10 +64,15 @@ def expand_variants(cube_fields: Dict) -> Dict:
     return cube_fields
 
 
-def get_table_alias(table_name: str) -> str:
+def get_table_alias(table_name: str, other_table_aliases=None) -> str:
     # get last part of the table name and add random string to it
-    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=3))
-    table_alias = table_name.split('.')[-1] + '_' + random_part
+    if other_table_aliases is None:
+        other_table_aliases = []
+
+    table_alias = table_name.split('.')[-1]
+    if table_alias in other_table_aliases:
+        random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+        table_alias += '_' + random_part
     return table_alias
 
 
@@ -78,12 +83,14 @@ def get_cube_fields(cube: Dict) -> Dict:
                    **{f['name']: {**f, 'dim': False, 'window': True} for f in cube.get('window_metrics', [])}}
     return cube_fields
 
+
 def get_compiled_cube_fields(cube: Dict) -> dict:
     cube_fields = get_cube_fields(cube)
     # expand variants
     cube_fields = expand_variants(cube_fields)
     # return list of field names
     return cube_fields
+
 
 def get_simple_variables(table: str, table_alias: str, cube_fields: Dict) -> Dict:
     field_variables = {cf: cube_fields[cf].get('sql') for cf in cube_fields}  # e.g ${revenue} - ${cost}
@@ -131,6 +138,7 @@ def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[
     always_filters = [substitute_variables(f, variables) for f in always_filters]
 
     where_expr = None
+    sub_filters = []
     if len(filters) > 0:
         sub_filters = [f"({substitute_variables(f.replace('.', '__'), variables)})" for f in filters or []]
 
@@ -144,10 +152,28 @@ def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[
         group_expr = ', '.join([str(i + 1) for i in dim_positions])
 
     order_expr = None
-    if len(sorts) > 0:  # todo add support for "desc" flag
-        sort_names = [s.split('.')[1] for s in sorts]
-        sort_positions = [i for i, sf in enumerate(select_fields) if sf.get('name') in sort_names]
-        order_expr = ', '.join([str(i + 1) for i in sort_positions])
+    if len(sorts) > 0:
+        # support for "desc" flag
+        # support for unnamed fields
+        sort_expressions = []
+        for s in sorts:
+            parts = s.split('.')
+            field_name = parts[1]
+            order = 'asc'
+
+            if ' desc' in field_name:
+                field_name = field_name.replace(' desc', '')
+                order = 'desc'
+
+            position = [i for i, sf in enumerate(select_fields) if sf.get('name') == field_name]
+
+            if position:
+                sort_expressions.append(str(position[0] + 1) + ' ' + order)
+            else:
+                field_expr = substitute_variables(cube_fields[field_name].get('sql'), variables)
+                sort_expressions.append(field_expr + ' ' + order)
+
+        order_expr = ', '.join(sort_expressions)
 
     # Generate sql clause
     query = f"""select {select_expr}
@@ -190,6 +216,7 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
 
     # prepare all cubes
     all_queried_dimensions = {}
+    other_table_aliases = []
 
     for cube in cubes:
         # check if all cubes have a join
@@ -202,7 +229,8 @@ def join_query(cubes: List[Dict], joins: List[Dict], fields: List[str], filters:
         cube_fields = expand_variants(cube_fields)
 
         cube['cube_fields'] = cube_fields
-        cube['alias'] = get_table_alias(cube.get('name'))
+        cube['alias'] = get_table_alias(cube.get('name'), other_table_aliases)
+        other_table_aliases.append(cube['alias'])
         cube['cube_vars'] = get_simple_variables(table=cube.get('name'),
                                                  cube_fields=cube.get('cube_fields'),
                                                  table_alias=cube.get('alias'))
@@ -452,7 +480,7 @@ def generate_sql_query(cubes_config: Dict, query: Dict) -> str:
     limit = query.get('limit', 5000)
 
     # read cubes
-    cubes = cubes_config.get('cubes', {})
+    cubes = cubes_config.get('cubes', [])
     joins = cubes_config.get('joins', [])
 
     # create a list of all dimensions and metrics names

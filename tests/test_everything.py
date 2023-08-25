@@ -4,8 +4,8 @@ import unittest
 from datetime import datetime, timedelta
 from typing import Dict, List
 
-from compiler import generate_sql_query
-from cube import load_cube_configs
+from dotml.compiler import generate_sql_query
+from dotml.cube import load_cube_configs
 
 
 class MyTestCase(unittest.TestCase):
@@ -87,7 +87,7 @@ class MyTestCase(unittest.TestCase):
             "fields": ["orders.id", "orders.booking_date_day", "orders.country_id", "orders.revenue",
                        "orders.average_order_value_rolling_30_days"],
             "filters": ["${orders.country_id} = '67'"],
-            "sorts": ["orders.booking_date_day"],
+            "sorts": ["orders.average_order_value"],
             "limit": 10
         }
 
@@ -96,6 +96,30 @@ class MyTestCase(unittest.TestCase):
         print(sql)
         result = self.execute_against_dummy_data(sql)
         self.assertGreater(len(result), 3)
+
+        # varation without window and not all fields selected
+        print('\n###\n')
+        query = {
+            "fields": ["orders.id", "orders.booking_date_day", "orders.revenue"],
+            "filters": ["${orders.country_id} = '67'"],
+            "limit": 10
+        }
+        sql = generate_sql_query(cube_configs[0], query)
+        print(sql)
+        result = self.execute_against_dummy_data(sql)
+        self.assertGreater(len(result), 3)
+
+        # varation with sort
+        print('\n###\n')
+        query = {
+            "fields": ["orders.booking_date_month", "orders.revenue"],
+            "sorts": ["orders.country_id desc"],
+            "limit": 10
+        }
+        sql = generate_sql_query(cube_configs[0], query)
+        print(sql)
+        result = self.execute_against_dummy_data(sql)
+        self.assertGreater(len(result), 2)
 
     def test_complex_query(self):
         # query = {
