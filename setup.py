@@ -8,7 +8,7 @@ with open(os.path.join(os.path.dirname(__file__), 'README.md'), encoding='utf-8'
 
 setup(
     name='dotml',
-    version='0.1.6',
+    version='0.1.7',
     packages=find_packages(),
     entry_points={
         'console_scripts': [
