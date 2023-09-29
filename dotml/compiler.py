@@ -164,6 +164,8 @@ def simple_query(cube: Dict, fields: List[str], filters: List[str], sorts: List[
             if ' desc' in field_name:
                 field_name = field_name.replace(' desc', '')
                 order = 'desc'
+            elif ' asc' in field_name:
+                field_name = field_name.replace(' asc', '')
 
             position = [i for i, sf in enumerate(select_fields) if sf.get('name') == field_name]
 
