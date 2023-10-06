@@ -522,6 +522,15 @@ def generate_sql_query(cubes_config: Dict, query: Dict) -> str:
         if cube_name not in needed_cubes:
             needed_cubes.append(cube_name)
 
+    # remove all filters that contain a metric field (not supported)
+    filters = [f for f in filters if not any([f.split('.')[1] in cube.get('metrics', []) for cube in cubes])]
+
+    # log a warning if a filter is removed
+    if len(filters) != len(query.get('filters', [])):
+        print(f"Removed {len(query.get('filters', [])) - len(filters)} filters that contain a metric field.")
+
+    # todo alternative: if a filter contains a metric field, we could add a having clause to the query
+
     if len(needed_cubes) == 0:
         raise ValueError(f"No cubes needed to generate the query. This is a bug.")
     elif len(needed_cubes) == 1:
